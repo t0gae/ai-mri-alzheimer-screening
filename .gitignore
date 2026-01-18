@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+
+# Data
+data/raw/
+data/processed/
+
+# Models & results
+models/*.h5
+results/*.npy
+results/*.csv
+
+# Figures (generated)
+figures/*.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
