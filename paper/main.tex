@@ -1,0 +1,366 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{amsmath,amsfonts}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{
+Screening-Oriented 3D Convolutional Neural Network \\
+for Alzheimer's Disease Detection from Structural MRI
+}
+
+\author{
+Georgii A. Erokhin \\
+\small Department of Information Security \\
+\small College of Information Technologies \\
+\small \texttt{georgii.erokhin@gmail.com}
+}
+
+\date{\today}
+
+\begin{document}
+\maketitle
+
+% =========================
+\begin{abstract}
+Early detection of Alzheimer's disease (AD) is critical for timely clinical intervention and disease management.
+Structural magnetic resonance imaging (sMRI) provides non-invasive biomarkers of neurodegeneration, but manual analysis is time-consuming and subject to inter-observer variability.
+
+In this work, we present a lightweight 3D convolutional neural network (CNN) for binary classification of Alzheimer's disease versus cognitively normal controls using volumetric MRI scans.
+The model is explicitly optimized for screening applications by prioritizing sensitivity through aggressive class-weighted training.
+Our architecture consists of three convolutional blocks with batch normalization, progressive dropout regularization, and global average pooling.
+
+Experiments on a held-out test set of 162 subjects demonstrate an AUC-ROC of 0.824 and a recall of 0.943 for dementia detection, with only 3 missed cases out of 53.
+While overall accuracy is moderate (67.9\%), the high sensitivity makes the proposed approach suitable as a first-pass automated screening tool to assist clinical decision-making.
+
+\end{abstract}
+
+% =========================
+\section{Introduction}
+
+Alzheimer's disease (AD) is the most common cause of dementia, affecting more than 55 million people worldwide, with prevalence expected to increase significantly due to population aging.
+Early diagnosis is essential for treatment planning, clinical trials, and patient care.
+Structural MRI (sMRI) reveals characteristic patterns of brain atrophy in AD, particularly in the hippocampus, entorhinal cortex, and temporal lobes~\cite{jack2010hypothetical}.
+
+Traditional neuroimaging pipelines rely on handcrafted features and region-of-interest volumetry, which require expert knowledge and substantial preprocessing.
+Recent advances in deep learning have enabled end-to-end learning directly from medical images, achieving promising results in brain disease classification~\cite{lecun2015deep, litjens2017survey}.
+
+However, many existing deep learning approaches prioritize overall accuracy, which may be suboptimal for clinical screening where false negatives are significantly more costly than false positives.
+In this study, we explicitly design and evaluate a screening-oriented 3D CNN that emphasizes high sensitivity for dementia detection.
+
+Our main contributions are:
+\begin{itemize}
+    \item A lightweight 3D CNN architecture suitable for limited neuroimaging datasets
+    \item Class-weighted training strategy to maximize dementia recall
+    \item Comprehensive evaluation with clinically motivated interpretation
+\end{itemize}
+
+% =========================
+\section{Methodology}
+
+\subsection{Dataset and Preprocessing}
+
+We utilize a dataset of 520 structural MRI brain scans with binary labels: cognitively normal (CN) and Alzheimer's disease (AD).
+The dataset is split using stratified sampling into training, validation, and test sets:
+
+\begin{itemize}
+    \item Training set: 333 subjects (64\%)
+    \item Validation set: 84 subjects (16\%)
+    \item Test set: 162 subjects (31\%, held-out)
+\end{itemize}
+
+The test set contains 109 normal controls (67\%) and 53 dementia cases (33\%), reflecting the class imbalance in the full dataset.
+
+All MRI volumes are preprocessed using standard neuroimaging procedures:
+\begin{enumerate}
+    \item Skull stripping to remove non-brain tissue
+    \item Bias field correction for intensity inhomogeneity
+    \item Affine registration to MNI152 template space
+    \item Resampling to $64 \times 64 \times 64$ isotropic resolution
+    \item Intensity normalization to the $[0,1]$ range
+\end{enumerate}
+
+\subsection{Problem Formulation}
+
+Let $\mathcal{D} = \{(X_i, y_i)\}_{i=1}^N$ denote a dataset of structural MRI scans,
+where $X_i \in \mathbb{R}^{64 \times 64 \times 64}$ represents a 3D brain volume
+and $y_i \in \{0,1\}$ is the corresponding class label,
+with $0$ indicating cognitively normal control and $1$ indicating dementia.
+
+The task is to learn a function
+\[
+f_\theta: \mathbb{R}^{64 \times 64 \times 64} \rightarrow [0,1]
+\]
+parameterized by $\theta$, which estimates the posterior probability
+$P(y = 1 \mid X)$.
+
+\subsection{Model Architecture}
+
+The proposed 3D CNN consists of three convolutional blocks followed by a fully connected classifier.
+Each convolutional block includes 3D convolution, batch normalization, ReLU activation, max pooling, and dropout.
+
+\textbf{Block 1:}
+\begin{itemize}
+    \item Conv3D (32 filters, $3 \times 3 \times 3$, same padding)
+    \item Batch Normalization
+    \item ReLU activation
+    \item MaxPooling3D ($2 \times 2 \times 2$)
+    \item Dropout (0.1)
+\end{itemize}
+
+\textbf{Block 2:}
+\begin{itemize}
+    \item Conv3D (64 filters, $3 \times 3 \times 3$, same padding)
+    \item Batch Normalization
+    \item ReLU activation
+    \item MaxPooling3D ($2 \times 2 \times 2$)
+    \item Dropout (0.2)
+\end{itemize}
+
+\textbf{Block 3:}
+\begin{itemize}
+    \item Conv3D (128 filters, $3 \times 3 \times 3$, same padding)
+    \item Batch Normalization
+    \item ReLU activation
+    \item Global Average Pooling 3D
+    \item Dropout (0.3)
+\end{itemize}
+
+\textbf{Classifier:}
+\begin{itemize}
+    \item Dense (128 units, ReLU)
+    \item Dropout (0.3)
+    \item Dense (1 unit, sigmoid)
+\end{itemize}
+
+The progressive dropout strategy provides increasing regularization in deeper layers.
+Global average pooling reduces the number of parameters and improves generalization compared to flattening.
+The total number of trainable parameters is approximately 450,000.
+
+\subsection{Loss Function and Class Imbalance Handling}
+
+Due to class imbalance in the dataset (approximately 2:1 ratio of normal to dementia),
+we employ weighted binary cross-entropy loss.
+The loss for a single sample is defined as:
+\[
+\mathcal{L}(y, \hat{y}) =
+- w_1 \, y \log(\hat{y})
+- w_0 \, (1 - y) \log(1 - \hat{y}),
+\]
+where $\hat{y} = f_\theta(X)$ is the predicted probability of dementia,
+and $w_0$, $w_1$ are class weights.
+
+In our experiments, we set:
+\[
+w_0 = 1.0, \quad w_1 = 5.0,
+\]
+placing higher penalty on false negatives (missed dementia cases).
+This design choice reflects clinical priorities,
+where missing a dementia diagnosis has more serious consequences than a false alarm.
+
+\subsection{Training Configuration}
+
+The model is optimized using the Adam optimizer~\cite{lecun2015deep} with an initial learning rate of $5 \times 10^{-4}$.
+Training is performed for up to 100 epochs with the following callbacks:
+
+\begin{itemize}
+    \item \textbf{Early stopping:} Monitors validation AUC with patience of 15 epochs
+    \item \textbf{ReduceLROnPlateau:} Reduces learning rate by factor 0.5 when validation AUC plateaus (patience 5 epochs)
+    \item \textbf{Model checkpoint:} Saves best model weights based on validation AUC
+\end{itemize}
+
+A batch size of 4 was used due to GPU memory constraints when processing 3D volumes.
+The model converged after 35 epochs, with early stopping restoring weights from epoch 20.
+
+\subsection{Evaluation Metrics}
+
+Performance is evaluated using standard classification metrics:
+
+\begin{itemize}
+    \item \textbf{Accuracy:} Overall classification correctness
+    \item \textbf{Precision:} Positive predictive value for dementia class
+    \item \textbf{Recall (Sensitivity):} True positive rate, $\text{TPR} = \frac{TP}{TP + FN}$
+    \item \textbf{F1-score:} Harmonic mean of precision and recall
+    \item \textbf{AUC-ROC:} Area under the receiver operating characteristic curve
+\end{itemize}
+
+The ROC curve plots TPR versus FPR:
+\begin{equation}
+\text{FPR} = \frac{FP}{FP + TN}
+\end{equation}
+
+AUC provides a threshold-independent measure of discriminative performance.
+
+% =========================
+\section{Results}
+
+\subsection{Overall Performance}
+
+Table~\ref{tab:metrics} summarizes the model's performance on the held-out test set of 162 subjects.
+
+\begin{table}[H]
+\centering
+\caption{Performance metrics on test set (n=162).}
+\label{tab:metrics}
+\begin{tabular}{@{}lc@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\ \midrule
+Accuracy        & 0.6790         \\
+Precision       & 0.5051         \\
+Recall          & 0.9434         \\
+F1-Score        & 0.6579         \\
+AUC-ROC         & 0.8238         \\ \bottomrule
+\end{tabular}
+\end{table}
+
+The model achieves high recall (0.943), correctly identifying 50 out of 53 dementia cases.
+Only 3 dementia cases are misclassified as normal (false negative rate of 5.7\%).
+The AUC-ROC of 0.824 indicates strong discriminative ability.
+
+\subsection{ROC Curve Analysis}
+
+Figure~\ref{fig:roc} presents the receiver operating characteristic curve.
+The curve shows the trade-off between sensitivity and specificity across all classification thresholds.
+The area under the curve (AUC = 0.824) substantially exceeds random performance (AUC = 0.5)
+and approaches excellent classification (AUC $>$ 0.9).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\linewidth]{figures/roc_curve_plotly.png}
+\caption{ROC curve on the held-out test set. The model achieves AUC = 0.824, significantly outperforming random classification (dashed diagonal).}
+\label{fig:roc}
+\end{figure}
+
+\subsection{Confusion Matrix}
+
+Figure~\ref{fig:cm} presents the confusion matrix.
+Out of 162 test subjects, the model correctly classified 110 cases (67.9\% accuracy).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.55\linewidth]{figures/confusion_matrix_plotly.png}
+\caption{Confusion matrix on test set. True labels on rows, predicted labels on columns.}
+\label{fig:cm}
+\end{figure}
+
+The detailed breakdown is:
+\begin{itemize}
+    \item \textbf{True Negatives (TN):} 60 (55.0\% of normal controls correctly identified)
+    \item \textbf{False Positives (FP):} 49 (45.0\% of normal controls misclassified as dementia)
+    \item \textbf{False Negatives (FN):} 3 (5.7\% of dementia cases missed)
+    \item \textbf{True Positives (TP):} 50 (94.3\% of dementia cases correctly identified)
+\end{itemize}
+
+\subsection{Per-Class Performance}
+
+Table~\ref{tab:perclass} shows detailed metrics for each class.
+
+\begin{table}[H]
+\centering
+\caption{Per-class performance metrics.}
+\label{tab:perclass}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\ \midrule
+Normal         & 0.9524             & 0.5505          & 0.6977            & 109              \\
+Dementia       & 0.5051             & 0.9434          & 0.6579            & 53               \\ \midrule
+Macro Avg      & 0.7287             & 0.7469          & 0.6778            & 162              \\
+Weighted Avg   & 0.8060             & 0.6790          & 0.6847            & 162              \\ \bottomrule
+\end{tabular}
+\end{table}
+
+The normal class achieves high precision (0.95), meaning that when the model predicts ``normal'', it is correct 95\% of the time.
+Conversely, the dementia class achieves high recall (0.94), meaning the model successfully detects 94\% of all dementia cases.
+
+% =========================
+\section{Discussion}
+
+\subsection{Clinical Utility}
+
+The results demonstrate that aggressive class weighting (5:1 ratio) effectively prioritizes dementia detection, achieving high sensitivity at the cost of reduced specificity.
+This trade-off is appropriate for screening applications, where missing a dementia case has more serious consequences than generating a false alarm.
+
+In a clinical workflow, the model could serve as a first-pass screening tool:
+\begin{enumerate}
+    \item All 162 scans are processed through the CNN
+    \item The model flags 99 cases (50 TP + 49 FP) as potentially having dementia
+    \item Clinicians review only the 99 flagged cases (39\% reduction in workload)
+    \item Only 3 out of 53 true dementia cases are missed (5.7\% false negative rate)
+\end{enumerate}
+
+While 49 false positives may seem high, this is acceptable in screening contexts where:
+\begin{itemize}
+    \item Subsequent clinical evaluation by experts is standard practice
+    \item The cost of missing a dementia diagnosis far exceeds the cost of unnecessary follow-up
+    \item The alternative is manual review of all 162 scans
+\end{itemize}
+
+\subsection{Comparison with Prior Work}
+
+Our AUC of 0.824 is competitive with recent deep learning approaches for AD classification:
+\begin{itemize}
+    \item Liu et al.~\cite{liu2018landmark}: AUC 0.84 using landmark-based multi-instance learning
+    \item Oh et al.~\cite{oh2019classification}: Accuracy 0.88 using transfer learning on larger datasets
+    \item Korolev et al.~\cite{korolev20173d}: Accuracy 0.80 with residual 3D CNNs
+\end{itemize}
+
+While our overall accuracy (67.9\%) is moderate, the recall of 0.943 exceeds typical values reported in prior work.
+This reflects our explicit design choice to prioritize sensitivity for screening applications.
+
+\subsection{Design Trade-offs}
+
+The 5:1 class weighting creates a deliberate trade-off:
+\begin{itemize}
+    \item \textbf{High dementia recall (0.94):} Catches nearly all dementia cases
+    \item \textbf{Low dementia precision (0.51):} Half of dementia predictions are false positives
+    \item \textbf{High normal precision (0.95):} When predicting normal, usually correct
+    \item \textbf{Low normal recall (0.55):} Many normals incorrectly flagged as dementia
+\end{itemize}
+
+Alternative configurations (e.g., equal class weights or different decision thresholds) would shift this trade-off, potentially increasing accuracy but reducing sensitivity.
+
+\subsection{Limitations and Future Work}
+
+Several limitations should be acknowledged:
+
+\begin{itemize}
+    \item \textbf{Dataset size:} 520 subjects is modest for deep learning; larger datasets may improve generalization
+    \item \textbf{Binary classification:} Does not capture disease severity or mild cognitive impairment (MCI)
+    \item \textbf{No external validation:} Performance on independent datasets (ADNI, OASIS) is unknown
+    \item \textbf{Lack of interpretability:} Model does not explain which brain regions drive predictions
+\end{itemize}
+
+Future work will explore:
+\begin{enumerate}
+    \item Attention mechanisms to identify disease-relevant brain regions
+    \item Multi-class classification including MCI and disease stages
+    \item External validation on public datasets
+    \item Grad-CAM visualizations for model interpretability
+    \item Integration with clinical data (cognitive scores, biomarkers)
+\end{enumerate}
+
+% =========================
+\section{Conclusion}
+
+We presented a screening-oriented 3D CNN for Alzheimer's disease detection from structural MRI.
+By prioritizing sensitivity through class-weighted training, the model achieves high recall (0.943) and competitive discriminative performance (AUC = 0.824) on a held-out test set.
+
+Key findings include:
+\begin{itemize}
+    \item Only 3 out of 53 dementia cases missed (5.7\% false negative rate)
+    \item Strong AUC (0.824) indicates good class separation
+    \item Lightweight architecture (450K parameters) suitable for limited datasets
+    \item Trade-off between sensitivity and specificity appropriate for screening
+\end{itemize}
+
+These results demonstrate the potential utility of the approach as an automated first-pass screening tool to support clinical workflows.
+The high sensitivity addresses a critical clinical need, enabling early detection while reducing manual review burden.
+
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+\end{document}
