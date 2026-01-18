@@ -18,6 +18,21 @@ This repository provides the implementation of a lightweight 3D convolutional ne
 
 High recall was achieved through class-weighted training to reduce false negatives, which is critical for medical screening applications.
 
+## Repository Structure
+
+```markdown
+ai-mri-alzheimer-screening/
+├── scripts/                    # Training and evaluation scripts
+│   ├── train_3dcnn.py
+│   ├── evaluate.py
+│   └── plot_results.py
+├── figures/                    # Generated figures (ROC, confusion matrix)
+├── paper/                      # LaTeX source of the accompanying paper
+├── models/                     # Trained model checkpoints (not tracked)
+├── results/                    # Saved test predictions (not tracked)
+├── requirements.txt
+└── README.md
+```
 ## Dataset
 
 Structural MRI scans were preprocessed and resampled to 64³ resolution. Due to data privacy and licensing restrictions, raw MRI data are not included.
