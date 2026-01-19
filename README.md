@@ -45,7 +45,7 @@ The code assumes preprocessed NumPy arrays:
 
 ### Training
 ```bash
-python scripts/train_final.py
+python scripts/train_3dcnn.py
 ```
 
 ## Dataset
